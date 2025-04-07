@@ -8,8 +8,9 @@ client.on("error", (err) => console.error("Redis Client Error", err));
 const exec = mongoose.Query.prototype.exec;
 
 
-mongoose.Query.prototype.cache = function() {
+mongoose.Query.prototype.cache = function(options= {}) {
   this.useCache = true;
+  this.hashKey = JSON.stringify(options.key ||"")
   return this;
 };
 
@@ -37,7 +38,7 @@ mongoose.Query.prototype.exec = async function () {
   );
   console.log(key);
 
-  const cacheValue = await client.get(key);
+  const cacheValue = await client.hGet(this.hashKey ,key);
 
   if (cacheValue) {
    const doc = JSON.parse(cacheValue);
@@ -50,31 +51,7 @@ mongoose.Query.prototype.exec = async function () {
 
   const result = await exec.apply(this, arguments);
 
-  client.set(key, JSON.stringify(result),'EX',10);
+  client.hSet(this.hashKey ,key, JSON.stringify(result),'EX',10);
   return result;
 };
 
-async function cacheQuery(query) {
-  if (!(query instanceof mongoose.Query)) {
-    throw new Error("cacheQuery must be called with a Mongoose query");
-  }
-
-  const key = JSON.stringify({
-    query: query.getQuery(),
-    collection: query.mongooseCollection.name,
-  });
-
-  // Check cache
-  const cacheValue = await client.get(key);
-  if (cacheValue) {
-    return JSON.parse(cacheValue);
-  }
-
-  // Execute query if not cached
-  const result = await query.exec();
-
-  // Store result in cache
-  // await client.set(key, JSON.stringify(result), "EX", ttl);
-
-  return result;
-}
