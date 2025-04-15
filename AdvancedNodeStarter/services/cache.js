@@ -36,11 +36,12 @@ mongoose.Query.prototype.exec = async function () {
       collection: this.mongooseCollection.name,
     })
   );
-  console.log(key);
+
 
   const cacheValue = await client.hGet(this.hashKey ,key);
 
   if (cacheValue) {
+    console.log("cache");
    const doc = JSON.parse(cacheValue);
 
    return Array.isArray(doc)
@@ -51,7 +52,15 @@ mongoose.Query.prototype.exec = async function () {
 
   const result = await exec.apply(this, arguments);
 
-  client.hSet(this.hashKey ,key, JSON.stringify(result),'EX',10);
+  await client.hSet(this.hashKey, key, JSON.stringify(result));
+  await client.expire(this.hashKey, 10);
   return result;
 };
 
+module.exports={
+  clearHash(hashKey){
+    console.log("clearing");
+    
+    client.del(JSON.stringify(hashKey))
+  }
+}
